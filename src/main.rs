@@ -1,0 +1,76 @@
+extern crate notify;
+extern crate redis;
+
+use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use redis::{Client, Commands, Connection, RedisResult};
+use std::env;
+use std::result::Result;
+use std::sync::mpsc::channel;
+use std::time::Duration;
+
+#[derive(Debug)]
+enum WatchError {
+    Notify(notify::Error),
+    Redis(redis::RedisError),
+}
+
+impl From<notify::Error> for WatchError {
+    fn from(err: notify::Error) -> WatchError {
+        WatchError::Notify(err)
+    }
+}
+
+impl From<redis::RedisError> for WatchError {
+    fn from(err: redis::RedisError) -> WatchError {
+        WatchError::Redis(err)
+    }
+}
+
+fn watch(path: String, redis_connect: String, redis_list: String) -> Result<(), WatchError> {
+    let (tx, rx) = channel();
+
+    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2))?;
+    let client = Client::open(redis_connect.as_ref())?;
+    let con = client.get_connection()?;
+
+    watcher.watch(path, RecursiveMode::Recursive)?;
+
+    loop {
+        match rx.recv() {
+            Ok(event) => {
+                println!("{:?}", event);
+                push_event(event, &con, &redis_list)?;
+            }
+            Err(e) => println!("watch error: {:?}", e),
+        }
+    }
+}
+
+fn push_event(event: DebouncedEvent, con: &Connection, list: &String) -> RedisResult<u8> {
+    match format_event(event) {
+        Some(formatted_event) => con.lpush(list, formatted_event),
+        None => Ok(0)
+    }
+}
+
+fn format_event(event: DebouncedEvent) -> Option<String> {
+    match event {
+        DebouncedEvent::Write(path) |
+        DebouncedEvent::Create(path) |
+        DebouncedEvent::Chmod(path) => Some(format!("write|{}", path.to_str()?)),
+        DebouncedEvent::Rename(from, to) => Some(format!("rename|{}|{}", from.to_str()?, to.to_str()?)),
+        DebouncedEvent::Remove(path) => Some(format!("remove|{}", path.to_str()?)),
+        _ => None
+    }
+}
+
+fn main() {
+    let args: Vec<_> = env::args().collect();
+    if args.len() == 4 {
+        if let Err(e) = watch(args[1].to_owned(), args[2].to_owned(), args[3].to_owned()) {
+            println!("error: {:?}", e)
+        }
+    } else {
+        println!("usage: {} <path> <redis_connect> <redis_list>", args[0])
+    }
+}
