@@ -37,19 +37,19 @@ fn watch(path: String, redis_connect: String, redis_list: String) -> Result<(), 
 
     loop {
         match rx.recv() {
-            Ok(event) => {
-                println!("{:?}", event);
-                push_event(event, &con, &redis_list)?;
-            }
+            Ok(event) => push_event(event, &con, &redis_list)?,
             Err(e) => println!("watch error: {:?}", e),
         }
     }
 }
 
-fn push_event(event: DebouncedEvent, con: &Connection, list: &String) -> RedisResult<u8> {
+fn push_event(event: DebouncedEvent, con: &Connection, list: &String) -> RedisResult<()> {
     match format_event(event) {
-        Some(formatted_event) => con.lpush(list, formatted_event),
-        None => Ok(0)
+        Some(formatted_event) => {
+            println!("{}", formatted_event);
+            return con.lpush(list, formatted_event);
+        },
+        None => Ok(())
     }
 }
 
