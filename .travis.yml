@@ -7,3 +7,12 @@ install:
 script:
 - "./travis-build.sh notify-redis ${TRAVIS_OS_NAME}"
 - "./test.sh ./notify-redis-${TRAVIS_OS_NAME}"
+deploy:
+  provider: releases
+  api_key:
+    secure: h4tCundDFU+g7sVF6prABpg7vs/smKindNMYSfPFVXhJuhxZ27ibLtXzf+SiD5Crqy5g5MKOIP8tQxAKI/7TScPkL8rOljBE5zRo9sCCcy4rikDWgGPRkCCuLfv9UTcEN9L6nwMdfAGMlWtcEkd46QsaoCm1ht/FQXngjV/uLmZyoMoGY01uupl75u9zi5OQiYNkJPWge2ceoFGIKvc3Zvmj1Le16zjIdjKmaWiIrUT4A4yYEulkLjujiOZNQOWF6wl7ZWKdG5B7E91brrv/pqP2TBe8axRS8RsBsrqv/n4LxvGTr4AZrLpMX6k/lCo28QBNzjrtq3+iGhxC6BQNg7qdgOh7CUYRt08O6LCtPnCgM9t2cXfrkYKlj3aoSeRqYozjxH2t4cfxdtgZczvX7tLPosLuFnU8OtiLPuB46PeSx+YbYcRGERzSy/vsvvbcGeABNpWC7/0rOvAdPMZiFYY+UARXWNd+Oegi1RQle7yPAU/FjHIA4qOcLhj3u6hyxb6UFwiHlzRXqE9GWawze6TkXLMbbkX7EJ6Mcr6FU3EBFpJ/5EatItzb8XyatyQrW5bZm+FZ4eXOwCNnwDTUkjOkYH1UlW2BcBSuodbVT+3avM8nBRSmOEaXXtrNpFF7ROCsdKIHUQpWq/2aDy9ccKnnClcLtdlvjCO5WAODXrk=
+  file: notify-redis-linux
+  skip_cleanup: true
+  on:
+    repo: icewind1991/notify-redis
+    tags: true
