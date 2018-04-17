@@ -1,0 +1,9 @@
+sudo: required
+services:
+- docker
+- redis-server
+install:
+- docker pull ekidd/rust-musl-builder:latest
+script:
+- "./travis-build.sh notify-redis ${TRAVIS_OS_NAME}"
+- "./test.sh ./notify-redis-${TRAVIS_OS_NAME}"
