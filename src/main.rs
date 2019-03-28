@@ -1,6 +1,3 @@
-extern crate notify;
-extern crate redis;
-
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use redis::{Client, Commands, Connection, RedisResult};
 use std::env;
