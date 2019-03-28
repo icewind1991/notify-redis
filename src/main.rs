@@ -4,6 +4,9 @@ use std::env;
 use std::result::Result;
 use std::sync::mpsc::channel;
 use std::time::Duration;
+use std::fmt::Display;
+use std::fmt;
+use std::error::Error;
 
 #[derive(Debug)]
 enum WatchError {
@@ -23,6 +26,24 @@ impl From<redis::RedisError> for WatchError {
     }
 }
 
+impl Display for WatchError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WatchError::Redis(err) => err.fmt(f),
+            WatchError::Notify(err) => err.fmt(f)
+        }
+    }
+}
+
+impl Error for WatchError {
+    fn cause(&self) -> Option<&Error> {
+        match self {
+            WatchError::Redis(err) => Some(err),
+            WatchError::Notify(err) => Some(err)
+        }
+    }
+}
+
 fn watch(path: &str, redis_connect: &str, redis_list: &str) -> Result<(), WatchError> {
     let (tx, rx) = channel();
 
@@ -35,7 +56,7 @@ fn watch(path: &str, redis_connect: &str, redis_list: &str) -> Result<(), WatchE
     loop {
         match rx.recv() {
             Ok(event) => push_event(event, &con, redis_list)?,
-            Err(e) => println!("watch error: {:?}", e),
+            Err(e) => println!("watch error: {}", e),
         }
     }
 }
@@ -67,7 +88,7 @@ fn main() {
     let args: Vec<_> = env::args().collect();
     if let [_, path, redis, list] = args.as_slice() {
         if let Err(e) = watch(path, redis, list) {
-            println!("error: {:?}", e)
+            println!("error: {}", e)
         }
     } else {
         println!("usage: {} <path> <redis_connect> <redis_list>", args[0])
