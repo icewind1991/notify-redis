@@ -5,5 +5,5 @@ authors = ["Robin Appelman <robin@icewind.nl>"]
 edition = "2018"
 
 [dependencies]
-notify = "4.0.0"
-redis = "0.8.0"
+notify = "4.0"
+redis = "0.10"

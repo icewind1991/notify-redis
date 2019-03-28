@@ -44,7 +44,7 @@ fn push_event(event: DebouncedEvent, con: &Connection, list: &str) -> RedisResul
     match format_event(event) {
         Some(formatted_event) => {
             println!("{}", formatted_event);
-            return con.lpush(list, formatted_event);
+            con.lpush(list, formatted_event)
         }
         None => Ok(()),
     }
