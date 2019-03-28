@@ -2,6 +2,14 @@
 
 Push filesystem notifications into a redis list
 
+## Getting the binary
+
+There are 3 ways for getting the binary to run
+
+- Grab a pre-compiled static binary from the [releases](https://github.com/icewind1991/notify-redis/releases) page.
+- By running `make` to use docker to build a static binary (requires `make` and `docker`)
+- By running `cargo build` (requires `rust`)
+
 ## Usage
 
 ```
