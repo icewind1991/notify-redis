@@ -1,5 +1,7 @@
 # Notify Redis
 
+[![Build Status](https://travis-ci.org/icewind1991/notify-redis.svg?branch=master)](https://travis-ci.org/icewind1991/notify-redis)
+
 Push filesystem notifications into a redis list
 
 ## Getting the binary
