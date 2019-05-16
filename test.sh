@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function assert_notify {
-    actual="$(redis-cli rpop notify)"
+    actual="$(echo $(redis-cli rpop notify) | sed -e 's/,\"time\":[^Z]*Z\"//g')" # strip time
     if [ "$actual" != "$1" ]
     then
         echo "'$actual' not equal to expected '$1'"
@@ -26,13 +26,13 @@ sleep 1
 echo foo > test/foo.txt
 sleep 2
 
-assert_notify "write|$(pwd)/test/foo.txt"
+assert_notify "{\"event\":\"modify\",\"path\":\"$(pwd)/test/foo.txt\"}"
 assert_notify ''
 
 mv test/foo.txt test/bar.txt
 sleep 2
 
-assert_notify "rename|$(pwd)/test/foo.txt|$(pwd)/test/bar.txt"
+assert_notify "{\"event\":\"move\",\"from\":\"$(pwd)/test/foo.txt\",\"to\":\"$(pwd)/test/bar.txt\"}"
 assert_notify ""
 
 rm test/bar.txt
@@ -40,7 +40,7 @@ echo asd > test/bar.txt
 
 sleep 2
 
-assert_notify "write|$(pwd)/test/bar.txt"
+assert_notify "{\"event\":\"modify\",\"path\":\"$(pwd)/test/bar.txt\"}"
 assert_notify ""
 
 rm test/bar.txt
@@ -49,8 +49,8 @@ echo asd > test/bar.txt
 
 sleep 2
 
-assert_notify "remove|$(pwd)/test/bar.txt"
-assert_notify "write|$(pwd)/test/bar.txt"
+assert_notify "{\"event\":\"delete\",\"path\":\"$(pwd)/test/bar.txt\"}"
+assert_notify "{\"event\":\"modify\",\"path\":\"$(pwd)/test/bar.txt\"}"
 assert_notify ""
 
 killall $(basename $bin)
