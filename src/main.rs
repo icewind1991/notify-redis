@@ -1,12 +1,12 @@
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use redis::{Client, Commands, Connection, RedisResult};
 use std::env;
+use std::error::Error;
+use std::fmt;
+use std::fmt::Display;
 use std::result::Result;
 use std::sync::mpsc::channel;
 use std::time::Duration;
-use std::fmt::Display;
-use std::fmt;
-use std::error::Error;
 
 #[derive(Debug)]
 enum WatchError {
@@ -30,16 +30,16 @@ impl Display for WatchError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             WatchError::Redis(err) => err.fmt(f),
-            WatchError::Notify(err) => err.fmt(f)
+            WatchError::Notify(err) => err.fmt(f),
         }
     }
 }
 
 impl Error for WatchError {
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         match self {
             WatchError::Redis(err) => Some(err),
-            WatchError::Notify(err) => Some(err)
+            WatchError::Notify(err) => Some(err),
         }
     }
 }
