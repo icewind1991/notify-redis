@@ -1,9 +1,12 @@
+use chrono::{DateTime, Timelike, Utc};
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use redis::{Client, Commands, Connection, RedisResult};
+use serde::Serialize;
 use std::env;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
+use std::path::PathBuf;
 use std::result::Result;
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -44,6 +47,41 @@ impl Error for WatchError {
     }
 }
 
+#[derive(Serialize, Debug)]
+#[serde(tag = "event")]
+#[serde(rename_all = "snake_case")]
+enum Event {
+    Modify {
+        path: PathBuf,
+        time: DateTime<Utc>,
+    },
+    Move {
+        from: PathBuf,
+        to: PathBuf,
+        time: DateTime<Utc>,
+    },
+    Delete {
+        path: PathBuf,
+        time: DateTime<Utc>,
+    },
+    None,
+}
+
+impl From<DebouncedEvent> for Event {
+    fn from(event: DebouncedEvent) -> Self {
+        let time = Utc::now().with_nanosecond(0).unwrap();
+
+        match event {
+            DebouncedEvent::Write(path)
+            | DebouncedEvent::Create(path)
+            | DebouncedEvent::Chmod(path) => Event::Modify { path, time },
+            DebouncedEvent::Rename(from, to) => Event::Move { from, to, time },
+            DebouncedEvent::Remove(path) => Event::Delete { path, time },
+            _ => Event::None,
+        }
+    }
+}
+
 fn watch(path: &str, redis_connect: &str, redis_list: &str) -> Result<(), WatchError> {
     let (tx, rx) = channel();
 
@@ -72,15 +110,10 @@ fn push_event(event: DebouncedEvent, con: &Connection, list: &str) -> RedisResul
 }
 
 fn format_event(event: DebouncedEvent) -> Option<String> {
-    match event {
-        DebouncedEvent::Write(path)
-        | DebouncedEvent::Create(path)
-        | DebouncedEvent::Chmod(path) => Some(format!("write|{}", path.to_str()?)),
-        DebouncedEvent::Rename(from, to) => {
-            Some(format!("rename|{}|{}", from.to_str()?, to.to_str()?))
-        }
-        DebouncedEvent::Remove(path) => Some(format!("remove|{}", path.to_str()?)),
-        _ => None,
+    let event: Event = event.into();
+    match &event {
+        Event::None => None,
+        _ => serde_json::to_string(&event).ok(),
     }
 }
 
