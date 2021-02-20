@@ -1,0 +1,71 @@
+on: [push, pull_request]
+
+name: CI
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+  build:
+    name: Build
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - aarch64-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          target: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --release --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: notify-redis-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/notify-redis
+
+  test:
+    name: Tests
+    runs-on: ubuntu-20.04
+
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
