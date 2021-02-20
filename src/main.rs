@@ -1,51 +1,12 @@
 use chrono::{DateTime, Timelike, Utc};
+use color_eyre::{eyre::WrapErr, Result};
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
-use redis::{Client, Commands, Connection, RedisResult};
+use redis::{Client, Commands, Connection};
 use serde::Serialize;
 use std::env;
-use std::error::Error;
-use std::fmt;
-use std::fmt::Display;
 use std::path::PathBuf;
-use std::result::Result;
 use std::sync::mpsc::channel;
 use std::time::Duration;
-
-#[derive(Debug)]
-enum WatchError {
-    Notify(notify::Error),
-    Redis(redis::RedisError),
-}
-
-impl From<notify::Error> for WatchError {
-    fn from(err: notify::Error) -> WatchError {
-        WatchError::Notify(err)
-    }
-}
-
-impl From<redis::RedisError> for WatchError {
-    fn from(err: redis::RedisError) -> WatchError {
-        WatchError::Redis(err)
-    }
-}
-
-impl Display for WatchError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WatchError::Redis(err) => err.fmt(f),
-            WatchError::Notify(err) => err.fmt(f),
-        }
-    }
-}
-
-impl Error for WatchError {
-    fn cause(&self) -> Option<&dyn Error> {
-        match self {
-            WatchError::Redis(err) => Some(err),
-            WatchError::Notify(err) => Some(err),
-        }
-    }
-}
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "event")]
@@ -82,28 +43,28 @@ impl From<DebouncedEvent> for Event {
     }
 }
 
-fn watch(path: &str, redis_connect: &str, redis_list: &str) -> Result<(), WatchError> {
+fn watch(path: &str, redis_connect: &str, redis_list: &str) -> Result<()> {
     let (tx, rx) = channel();
 
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(2))?;
-    let client = Client::open(redis_connect)?;
-    let con = client.get_connection()?;
+    let client = Client::open(redis_connect).wrap_err("Invalid redis connection")?;
+    let mut con = client
+        .get_connection()
+        .wrap_err("Failed to open redis connection")?;
 
     watcher.watch(path, RecursiveMode::Recursive)?;
 
-    loop {
-        match rx.recv() {
-            Ok(event) => push_event(event, &con, redis_list)?,
-            Err(e) => println!("watch error: {}", e),
-        }
+    while let Ok(event) = rx.recv() {
+        push_event(event, &mut con, redis_list).wrap_err("Failed to send event to redis")?;
     }
+    Ok(())
 }
 
-fn push_event(event: DebouncedEvent, con: &Connection, list: &str) -> RedisResult<()> {
+fn push_event(event: DebouncedEvent, con: &mut Connection, list: &str) -> Result<()> {
     match format_event(event) {
         Some(formatted_event) => {
             println!("{}", formatted_event);
-            con.lpush(list, formatted_event)
+            Ok(con.lpush(list, formatted_event)?)
         }
         None => Ok(()),
     }
@@ -117,13 +78,12 @@ fn format_event(event: DebouncedEvent) -> Option<String> {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args: Vec<_> = env::args().collect();
     if let [_, path, redis, list] = args.as_slice() {
-        if let Err(e) = watch(path, redis, list) {
-            println!("error: {}", e)
-        }
+        watch(path, redis, list)?;
     } else {
         println!("usage: {} <path> <redis_connect> <redis_list>", args[0])
     }
+    Ok(())
 }
