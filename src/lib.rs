@@ -1,4 +1,3 @@
-use chrono::{DateTime, Timelike, Utc};
 use color_eyre::{eyre::WrapErr, Result};
 use notify::event::{ModifyKind, RenameMode};
 use notify::{EventKind, RecursiveMode, Watcher};
@@ -8,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::time::Duration;
+use time::OffsetDateTime;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "event")]
@@ -15,23 +15,28 @@ use std::time::Duration;
 pub enum Event {
     Modify {
         path: PathBuf,
-        time: DateTime<Utc>,
+        #[serde(with = "time::serde::iso8601")]
+        time: OffsetDateTime,
     },
     Move {
         from: PathBuf,
         to: PathBuf,
-        time: DateTime<Utc>,
+        #[serde(with = "time::serde::iso8601")]
+        time: OffsetDateTime,
     },
     Delete {
         path: PathBuf,
-        time: DateTime<Utc>,
+        #[serde(with = "time::serde::iso8601")]
+        time: OffsetDateTime,
     },
     None,
 }
 
 impl From<DebouncedEvent> for Event {
     fn from(event: DebouncedEvent) -> Self {
-        let time = Utc::now().with_nanosecond(0).unwrap();
+        let now = OffsetDateTime::now_utc();
+        let elapsed = event.time.elapsed();
+        let time = now - elapsed;
 
         let path_count = event.paths.len();
         let mut paths = event.event.paths.into_iter();
