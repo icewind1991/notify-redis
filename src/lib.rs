@@ -1,6 +1,8 @@
 use chrono::{DateTime, Timelike, Utc};
 use color_eyre::{eyre::WrapErr, Result};
-use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::event::{ModifyKind, RenameMode};
+use notify::{EventKind, RecursiveMode, Watcher};
+use notify_debouncer_full::{new_debouncer, DebouncedEvent};
 use redis::{Client, Commands, Connection, IntoConnectionInfo};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -31,12 +33,23 @@ impl From<DebouncedEvent> for Event {
     fn from(event: DebouncedEvent) -> Self {
         let time = Utc::now().with_nanosecond(0).unwrap();
 
-        match event {
-            DebouncedEvent::Write(path)
-            | DebouncedEvent::Create(path)
-            | DebouncedEvent::Chmod(path) => Event::Modify { path, time },
-            DebouncedEvent::Rename(from, to) => Event::Move { from, to, time },
-            DebouncedEvent::Remove(path) => Event::Delete { path, time },
+        let path_count = event.paths.len();
+        let mut paths = event.event.paths.into_iter();
+
+        match (event.event.kind, path_count) {
+            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), 2..) => Event::Move {
+                from: paths.next().unwrap(),
+                to: paths.next().unwrap(),
+                time,
+            },
+            (EventKind::Modify(_) | EventKind::Create(_), 1..) => Event::Modify {
+                path: paths.next().unwrap(),
+                time,
+            },
+            (EventKind::Remove(_), 1..) => Event::Delete {
+                path: paths.next().unwrap(),
+                time,
+            },
             _ => Event::None,
         }
     }
@@ -50,16 +63,20 @@ pub fn watch(
 ) -> Result<()> {
     let (tx, rx) = channel();
 
-    let mut watcher: RecommendedWatcher = Watcher::new(tx, debounce)?;
+    let mut watcher = new_debouncer(debounce, None, tx)?;
     let client = Client::open(redis_connect).wrap_err("Invalid redis connection")?;
     let mut con = client
         .get_connection()
         .wrap_err("Failed to open redis connection")?;
 
-    watcher.watch(path, RecursiveMode::Recursive)?;
+    watcher
+        .watcher()
+        .watch(path.as_ref(), RecursiveMode::Recursive)?;
 
     while let Ok(event) = rx.recv() {
-        push_event(event, &mut con, redis_list).wrap_err("Failed to send event to redis")?;
+        for event in event.into_iter().flatten() {
+            push_event(event, &mut con, redis_list).wrap_err("Failed to send event to redis")?;
+        }
     }
     Ok(())
 }

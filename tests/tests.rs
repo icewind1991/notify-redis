@@ -28,7 +28,7 @@ impl EventList {
     }
 
     fn next(&mut self) -> Option<Event> {
-        let raw: Option<String> = self.redis.rpop(&self.list).unwrap();
+        let raw: Option<String> = self.redis.rpop(&self.list, None).unwrap();
         raw.map(|raw| serde_json::from_str(&raw).unwrap())
     }
 }
